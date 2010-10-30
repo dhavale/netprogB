@@ -1,12 +1,73 @@
 /*
- * server_lib.c
+ * common_lib.c
  *
  *  Created on: Oct 15, 2010
  *      Author: kaduparag
  */
-//#include "server.h"
+#include "server.h"
 #include "client.h"
 #include "unpifiplus.h"
+
+ int isNewClient(struct client_info *clientListHead, unsigned int client_ip,
+               unsigned short int client_port) {
+       struct client_info *client_list = clientListHead;
+       for (; client_list != NULL; client_list = client_list->next) {
+               if (client_list->ipaddr == client_ip && client_list->port
+                               == client_port) {
+                       printf("Client :%d %d\n",client_ip,client_port);
+                       return 0;
+               }
+       }
+       return 1;
+}
+
+void printClientList(struct client_info *clientListHead) {
+       struct client_info *client_list = clientListHead;
+       for (; client_list != NULL; client_list = client_list->next) {
+                       printf("Client :%d %d\n",client_list->ipaddr,client_list->port);
+       }
+}
+
+void deleteClient(struct client_info **clientListHead, unsigned int client_ip,
+               unsigned short int client_port) {
+
+				printf("\nrequesting delete ip:%d port:%d\n",client_ip,client_port);
+       struct client_info *client_list_temp,*client_list = *clientListHead,*client_list_prev= *clientListHead;
+       for (; client_list != NULL; client_list = client_list->next) {
+               if ((client_list->ipaddr == client_ip) && (client_list->port
+                               == client_port)) {//this is the node to be deleted.
+
+			printf("\ndeleting ip:%d port:%d\n",client_list->ipaddr,client_list->port);
+                       if(client_list==*clientListHead){//head node
+                         *clientListHead=client_list->next;
+                          free(client_list);
+			printf("if executed\n");
+                       }else{
+                               client_list_prev->next=client_list->next;
+                               free(client_list);
+			printf("else executed\n");
+                       }
+               }
+               client_list_prev=client_list;
+       }
+
+}
+
+void insertClient(struct client_info **clientListHead, unsigned int client_ip,
+               unsigned short int client_port) {
+       struct client_info *client_info_node;
+       client_info_node = (struct client_info *) malloc(sizeof(struct client_info));
+       client_info_node->ipaddr = client_ip;
+       client_info_node->port = client_port;
+       client_info_node->next = *clientListHead; //point to already exisiting list
+
+       *clientListHead = client_info_node;// New head
+//        printf("Client inserted:%d %d\n",client_info_node->ipaddr,client_info_node->port);
+}
+
+
+
+
 int readable_timeout(int fd, int sec,int usec) {
 	fd_set rset;
 	struct timeval tv;

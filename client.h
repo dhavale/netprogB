@@ -33,6 +33,7 @@
 #define	min(a,b)	((a) < (b) ? (a) : (b))
 #define	max(a,b)	((a) > (b) ? (a) : (b))
 
+#if 0
 struct interface_info {
 char ifi_name[IFI_NAME];	/* interface name, null-terminated */
 struct sockaddr_in ifi_addr;	/* primary address */
@@ -42,6 +43,6 @@ int	sockfd;
 struct interface_info *ifi_next;	/* next of these structures */
 };
 void err_sys_p(const char *);
-
+#endif
 
 #endif /* CLIENT_H_ */

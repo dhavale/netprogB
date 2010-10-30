@@ -5,7 +5,7 @@
  *      Author: kaduparag
  */
 
-#include	"client.h"
+#include	"server.h"
 
 //Global
 char serverIP[INET_ADDRSTRLEN];
@@ -46,7 +46,7 @@ int isIPAddress(const char *addr) {
 int main(int argc, char **argv) {
 	int sockfd;
 	struct sockaddr_in servaddr;
-	int len;
+	int len,on=1;
 	struct interface_info *head;
 	struct sockaddr_in closest;
 	generate_ifi_list(&head);
@@ -116,6 +116,10 @@ int main(int argc, char **argv) {
 
 	//printf("[INFO] closest is %s\n",inet_ntoa(closest.sin_addr));
 	cliaddr.sin_addr.s_addr = closest.sin_addr.s_addr;	
+	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sockfd < 0) {
+		err_sys_p("Socket error.");
+	}
 
 	if(ret==1)
 	{
@@ -128,6 +132,9 @@ int main(int argc, char **argv) {
 	else if(ret==2)
 	{
 		/**then its on local n/w , use dont' route**/
+		if(setsockopt(sockfd, SOL_SOCKET, SO_DONTROUTE, (void *) &on, sizeof(on)) < 0)
+	    err_sys_p("Can't set SO_DONTROUTE on main socket"); 
+
 		if (inet_pton(AF_INET, serverIP, &servaddr.sin_addr) != 1)
 		err_sys_p("Cannot convert string IP to binary IP.");
 
@@ -140,10 +147,6 @@ int main(int argc, char **argv) {
 
 	}
 	
-	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (sockfd < 0) {
-		err_sys_p("Socket error.");
-	}
 
 	dg_cli(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 
@@ -200,19 +203,15 @@ void dg_cli(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) {
 	recvline[n] = 0; // null terminate
 	fputs(recvline, stdout);
 
-	//Close the old connection and connect to new one.
-	close(sockfd);
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(atoi(recvline));
 	if (inet_pton(AF_INET, serverIP, &servaddr.sin_addr) != 1)
 		err_sys_p("Cannot convert string IP to binary IP.");
 
-	connection_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (connection_sockfd < 0) {
-		err_sys_p("Socket error.");
-	}
+	connection_sockfd = sockfd;
 	if (connect(connection_sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+
 		err_sys_p("Connect error");
 	}
 

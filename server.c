@@ -13,6 +13,8 @@ int socketDescriptors[MAX_INTERFACE];//TODO Make MAX_INTERFACE dynamic by using 
 int server_port, max_win_size;
 int TIMEOUT_SEC=1;
 int TIMEOUT_USEC=0;
+struct client_info *clientListHead=NULL;
+struct interface_info *ifihead=NULL;
 //----------------------------------------------------------------------------------
 
 int mydg_echo(int ,const char *);
@@ -41,7 +43,7 @@ int main(int argc, char **argv) {
 	const int on = 1;
 	pid_t pid;
 	int child_pid;
-	struct interface_info *ifi, *ifihead,*node;
+	struct interface_info *ifi,*node;
 	struct sockaddr_in *sa;
 	//I/O Multiplexing Select options
 	int maxfdp1,j;
@@ -144,9 +146,10 @@ int main(int argc, char **argv) {
 //----------------------------------------------------------------------------------
 int mydg_echo(int sockfd,const char * myaddr) {
 
-	int n, i, connection_sockfd,success_flag,attempt_count;
+	int n, i, connection_sockfd,success_flag,attempt_count,ret,on=1;
 	char *filename, con_sock_port[8];//TODO con_sock_port size? FILE_NAME_LEN?
 	char *sendline, *recvline;
+	struct in_addr closest;
 	socklen_t  addrlen,clilen;
 	struct sockaddr_in localaddr,cliaddr;
 
@@ -166,6 +169,36 @@ int mydg_echo(int sockfd,const char * myaddr) {
 		err_sys_p("Data receive error.");
 	}
 	filename[n] = 0; //null terminate
+
+	 //Get the ipaddr, port number from the client
+	       struct sockaddr_in *sin = (struct sockaddr_in *) &cliaddr;
+	
+	ret= closest_match_to_interface(ifihead, inet_ntoa(sin->sin_addr),&closest);
+	if(ret==1)
+	{
+		//localhost
+	}	
+	else if(ret==2)
+	{
+		//Dont route
+	 if(setsockopt(sockfd, SOL_SOCKET, SO_DONTROUTE, (void *) &on, sizeof(on)) < 0)
+	    err_sys_p("Can't set SO_DONTROUTE on main socket"); 
+
+	}
+	else
+	{
+		//Dont care
+	}
+       //Check for already active client
+	   if(isNewClient(clientListHead,sin->sin_addr.s_addr,ntohs(sin->sin_port))){
+	       printf("[DEBUG] New client...inserting\n");
+           //insert into the client list
+	       insertClient(&clientListHead,sin->sin_addr.s_addr,ntohs(sin->sin_port));
+	       printf("Client inserted:%d %d\n",clientListHead->ipaddr,clientListHead->port);
+	   }else{ // End this child process.Client already handled by other child process.
+           	printf("[DEBUG] Client already present...\n");
+          	exit(0);
+	   }
 	printf("[INFO] Child server %d datagram from %s", getpid(), Sock_ntop(
 			(struct sockaddr *) &cliaddr, clilen));
 	printf(", to %s\n", myaddr);
@@ -244,7 +277,10 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	free(recvline);
 	free(sendline);
 	free(filename);
-
+//Client handling done. Remove from the client list
+       printClientList(clientListHead);
+       deleteClient(&clientListHead,sin->sin_addr.s_addr,ntohs(sin->sin_port));
+       printClientList(clientListHead);
 	return getpid();
 }
 /* end mydg_echo */

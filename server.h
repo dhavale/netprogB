@@ -43,9 +43,15 @@ int	sockfd;
 struct interface_info *ifi_next;	/* next of these structures */
 };
 
+struct client_info{
+       unsigned int ipaddr;
+       unsigned short int port;
+       struct client_info *next;
+};
+
 void err_sys_p(const char *);
 char * Sock_ntop(const struct sockaddr *sa, socklen_t salen);
 char * sock_ntop(const struct sockaddr *sa, socklen_t salen);
-int generate_ifi_list(struct interface_info **head);
+//int generate_ifi_list(struct interface_info **head);
 
 #endif /* SERVER_H_ */
