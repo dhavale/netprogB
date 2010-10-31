@@ -17,32 +17,6 @@ struct sockaddr_in cliaddr;
 
 void dg_cli(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen);
 
-#if 0
-//--------------------------------------------------------------------------------
-void err_sys(const char * msg) {
-	printf("ERROR: %s\n", msg);
-	exit(1);
-}
-//--------------------------------------------------------------------------------
-
-int isIPAddress(const char *addr) {
-	int status = 1, i;
-	int len = strlen(addr);
-	for (i = 0; i < len; i++) {
-		if (addr[i] == '.' || (addr[i] >= '0' && addr[i] <= '9')) {
-			continue;
-		} else {
-			status = 0;
-			break;
-		}
-
-	}
-	return status;
-}
-//------------------------------------------------------------------------------
-
-#endif
-
 int main(int argc, char **argv) {
 	int sockfd;
 	struct sockaddr_in servaddr;
@@ -157,7 +131,8 @@ void dg_cli(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) {
 	int n,connection_sockfd,attempt_count,success_flag;
 	char sendline[MAXLINE], recvline[MAXLINE + 1];
 	struct sockaddr_in servaddr;
-	
+	struct udp_datagram *recv_buffer = (struct udp_datagram *)malloc(sizeof(struct udp_datagram));
+	struct udp_ack *client_ack = (struct udp_ack*)malloc(sizeof(struct udp_ack));
 	//Bind and print client socket addr.
 	cliaddr.sin_addr.s_addr = htonl(cliaddr.sin_addr.s_addr);
 
@@ -224,18 +199,32 @@ void dg_cli(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) {
 	//	fflush(NULL);
 	//Read the file and print output.
 	while (1) {
-		if ((n = read(connection_sockfd, recvline, MAXLINE)) == -1)
-			err_sys_p("Read error. Server is unreachable");
-		else if (n == 0)
-			break;
 
-		recvline[n] = 0; // null terminate
-		fputs(recvline, stdout);
+		bzero(recv_buffer,sizeof(struct udp_datagram));
+		if ((n = read(connection_sockfd, recv_buffer, sizeof(struct udp_datagram))) == -1)
+			err_sys_p("Read error. Server is unreachable");
+		else if (n < 512){
+			printf("%d bytes recieved\n",n);
+			n=write(fileno(stdout),recv_buffer->data,n-4);
+			client_ack->seq_ack_num++; 
+			if (write(connection_sockfd, client_ack, sizeof(struct udp_ack)) != sizeof(struct udp_ack)) {
+				err_sys("Write error.Server is unreachable");
+			}
+			break;
+		}
+		
+		n=write(fileno(stdout),recv_buffer->data,n-4);
+		printf("%d bytes recieved\n",n);
+
 		//send ACK
 		/*int len = strlen(sendline);
 		if (write(connection_sockfd, sendline, len) != len) {
 			err_sys("Write error.Server is unreachable");
 		}*/
+		client_ack->seq_ack_num++; 
+		if (write(connection_sockfd, client_ack, sizeof(struct udp_ack)) != sizeof(struct udp_ack)) {
+			err_sys("Write error.Server is unreachable");
+		}
 	}
 	printf("[INFO] File transfer completed.\n");
 }
