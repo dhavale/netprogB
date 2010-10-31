@@ -19,6 +19,7 @@
 #include  <errno.h>
 #include  <arpa/inet.h>
 #include  <sys/wait.h>
+#include  "np_udp.h"
 //---------------------------------------------------------------------------//
 
 #define	MAXLINE		4096	/* max text line length */
@@ -48,6 +49,8 @@ struct client_info{
        unsigned short int port;
        struct client_info *next;
 };
+
+
 
 void err_sys_p(const char *);
 char * Sock_ntop(const struct sockaddr *sa, socklen_t salen);

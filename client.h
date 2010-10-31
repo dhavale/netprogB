@@ -19,6 +19,7 @@
 #include  <errno.h>
 #include  <arpa/inet.h>
 #include  <sys/wait.h>
+#include  "np_udp.h"
 //---------------------------------------------------------------------------//
 
 #define	MAXLINE		4096	/* max text line length */
