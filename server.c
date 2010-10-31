@@ -6,7 +6,8 @@
  */
 //-----------------------------------------------------------------------------------
 #include	"server.h"
-
+#include <sys/stat.h> 
+#include <fcntl.h>
 //---------------------------GLOBAL----------------------------------------------------
 int interfaceCount = 0;
 int socketDescriptors[MAX_INTERFACE];//TODO Make MAX_INTERFACE dynamic by using getInterfaceInfo().
@@ -149,10 +150,12 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	int n, i, connection_sockfd,success_flag,attempt_count,ret,on=1;
 	char *filename, con_sock_port[8];//TODO con_sock_port size? FILE_NAME_LEN?
 	char *sendline, *recvline;
+	struct udp_datagram *sender_buffer = (struct udp_datagram *)malloc(sizeof(struct udp_datagram));
+	struct udp_ack *client_ack= (struct udp_ack*)malloc(sizeof(struct udp_datagram));
 	struct in_addr closest;
 	socklen_t  addrlen,clilen;
 	struct sockaddr_in localaddr,cliaddr;
-
+	int num_bytes_read,fsocket;
 	sendline = malloc(MAXLINE);
 	recvline = malloc(MAXLINE);
 	filename = malloc(MAXLINE);
@@ -265,15 +268,41 @@ int mydg_echo(int sockfd,const char * myaddr) {
     fflush(NULL);
 	//Send the file on connection socket and close the parent listening socket
 	close(sockfd);
-	if (sendto(connection_sockfd, filename, strlen(filename), 0, (struct sockaddr *) &cliaddr, clilen)
-			!= strlen(filename)) { //using the parent listening socket
-		err_sys_p("Data send error.");
-	}
+/**	open a file and start reading from the file send bytes**/
 
-	if (sendto(connection_sockfd, 0, 0, 0, (struct sockaddr *) &cliaddr, clilen) != 0) { //using the parent listening socket
-		err_sys_p("Data send error.");
-	}
 
+	fsocket=open(filename,O_RDONLY);
+	if(fsocket<0)
+		err_sys_p("Unable to open file");
+	
+	do {
+		bzero(sender_buffer,sizeof(struct udp_datagram));
+		bzero(client_ack,sizeof(struct udp_ack));
+		 num_bytes_read = read(fsocket, sender_buffer->data, sizeof(sender_buffer->data));
+
+		if(num_bytes_read< 0)
+			err_sys_p("file read error.");
+		else
+		{
+			printf("sending % d bytes\n",num_bytes_read+4);
+
+			if (sendto(connection_sockfd, sender_buffer, num_bytes_read+4, 0, (struct sockaddr *) &cliaddr, clilen) != (num_bytes_read+4)) { //using the parent 	listening socket
+				err_sys_p("Data send error.");
+			}
+		}
+		/*wait for ack*/
+		n = recvfrom(connection_sockfd, client_ack, sizeof(struct udp_ack), 0, (struct sockaddr *) &cliaddr, &clilen);
+		if (n < 0) {
+			err_sys_p("Ack recv error.");
+		}	
+		else {
+			printf("Seq:%d cwnd:%d\n",client_ack->seq_ack_num,client_ack->cwnd);
+		}
+		
+	
+	}while(num_bytes_read==508);
+	 
+	
 	free(recvline);
 	free(sendline);
 	free(filename);
