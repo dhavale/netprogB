@@ -3,7 +3,7 @@ CC = gcc
 
 LIBS = /home/sandeep/unpv13e/libunp.a
 
-FLAGS =  -g -O2
+FLAGS =  -g -O2 -Wall
 CFLAGS = ${FLAGS} -I/home/sandeep/unpv13e/lib
 
 all: client server

@@ -8,11 +8,12 @@
 #include	"server.h"
 #include <sys/stat.h> 
 #include <fcntl.h>
+#include "common_lib.h"
 //---------------------------GLOBAL----------------------------------------------------
 int interfaceCount = 0;
 int socketDescriptors[MAX_INTERFACE];//TODO Make MAX_INTERFACE dynamic by using getInterfaceInfo().
 int server_port, max_win_size;
-int TIMEOUT_SEC=1;
+int TIMEOUT_SEC=2;
 int TIMEOUT_USEC=0;
 struct client_info *clientListHead=NULL;
 struct interface_info *ifihead=NULL;
@@ -20,24 +21,6 @@ struct interface_info *ifihead=NULL;
 
 int mydg_echo(int ,const char *);
 
-//-------------------------------------------------------------------------------
-struct interface_info * getInterfaceInfo() {
-/*
-	struct interface_info *ifi;
-	ifi = calloc(1, sizeof(struct interface_info));
-	if (ifi == NULL) {
-		err_sys_p("calloc error");
-	}
-	char str[INET_ADDRSTRLEN];
-	strcpy(ifi->ifi_name, "localhost");
-	strcpy(str, "127.0.0.1");
-	ifi->ifi_addr = calloc(1, sizeof(struct sockaddr));
-	if (inet_pton(AF_INET, str, ifi->ifi_addr) != 1) {
-		err_sys_p("Cannot convert string IP to binary IP.");
-	}
-	return ifi;
-*/
-}
 //--------------------------------------------------------------------------------
 int main(int argc, char **argv) {
 	int i;
@@ -290,6 +273,22 @@ int mydg_echo(int sockfd,const char * myaddr) {
 				err_sys_p("Data send error.");
 			}
 		}
+	success_flag = 0;
+       for (attempt_count = 0; attempt_count < MAX_ATTEMPT; attempt_count++) {
+               if (readable_timeout(connection_sockfd, TIMEOUT_SEC, TIMEOUT_USEC) == 0) {
+                       printf("Socket timeout...attempt %d failed.\n", attempt_count);
+                       if (sendto(connection_sockfd, sender_buffer, num_bytes_read+4, 0,
+				 (struct sockaddr *) &cliaddr, clilen) != (num_bytes_read+4)) { //using the parent 	listening socket
+				err_sys_p("Data send error.");
+			}
+               } else {
+                       success_flag = 1;
+                       break;
+               }
+       }
+       if (success_flag == 0) {//TODO what to do if MAX_ATTEMT fail? report and end prgm?
+               err_sys("Socket timeout...max no. of attempt failed.\n");
+       }
 		/*wait for ack*/
 		n = recvfrom(connection_sockfd, client_ack, sizeof(struct udp_ack), 0, (struct sockaddr *) &cliaddr, &clilen);
 		if (n < 0) {

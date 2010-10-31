@@ -30,19 +30,11 @@
 #define MAX_INTERFACE 10
 #define MAX_LINE 80
 #define FILE_NAME_LEN 40
-#define MAX_ATTEMPT 3
+#define MAX_ATTEMPT 12
 
 #define	min(a,b)	((a) < (b) ? (a) : (b))
 #define	max(a,b)	((a) > (b) ? (a) : (b))
 
-struct interface_info {
-char ifi_name[IFI_NAME];	/* interface name, null-terminated */
-struct sockaddr_in ifi_addr;	/* primary address */
-struct sockaddr_in ifi_net_mask; /* destination address */
-struct sockaddr_in ifi_subnet_addr; /* obtained by anding of ip and subnet*/
-int	sockfd;
-struct interface_info *ifi_next;	/* next of these structures */
-};
 
 struct client_info{
        unsigned int ipaddr;
@@ -52,9 +44,6 @@ struct client_info{
 
 
 
-void err_sys_p(const char *);
-char * Sock_ntop(const struct sockaddr *sa, socklen_t salen);
-char * sock_ntop(const struct sockaddr *sa, socklen_t salen);
 //int generate_ifi_list(struct interface_info **head);
 
 #endif /* SERVER_H_ */

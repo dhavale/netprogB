@@ -29,10 +29,14 @@
 #define	IFI_HADDR	 8			/* allow for 64-bit EUI-64 in future */
 #define FILE_NAME_LEN 40
 #define MAX_LINE 80
-#define MAX_ATTEMPT 3
+//#define MAX_ATTEMPT 3
 
 #define	min(a,b)	((a) < (b) ? (a) : (b))
 #define	max(a,b)	((a) > (b) ? (a) : (b))
+
+void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen);
+
+int isSeqRecieved(int seq, struct udp_datagram * recv_buffer,int size);
 
 #if 0
 struct interface_info {

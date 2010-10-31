@@ -4,9 +4,8 @@
  *  Created on: Oct 15, 2010
  *      Author: kaduparag
  */
-#include "server.h"
-#include "client.h"
-#include "unpifiplus.h"
+#include "common_lib.h"
+#include <stdio.h>
 
  int isNewClient(struct client_info *clientListHead, unsigned int client_ip,
                unsigned short int client_port) {
@@ -251,5 +250,34 @@ int closest_match_to_interface(struct interface_info *head, char *str_ip,struct 
 	return 0;
 }
 
+ int mywritel(int sockfd,void * sendline, int len,float drop_prob) {
+       float random;
+	int n;
+       //srand(10);
+       random=(float)rand()/RAND_MAX;
+       printf("Random number:%f probw %f \n",random,drop_prob);
+       if(drop_prob <random){
+                printf("Sending packet....\n");
+                       if ((n=write(sockfd, sendline, len)) != len)
+                               	n=-1;
+       }else{
+	    printf("Ack dropped\n");
+               n=len;
+       }
+	return n;
+}
 
+int myreadl(int sockfd, void * recvline, int maxline,float drop_prob) {
+       int n=-1;
+       float random;
+               random=(float)rand()/RAND_MAX;
+       printf("Random number:%f prob %f\n",random,drop_prob);
+	n = read(sockfd, recvline, maxline);
+       if(drop_prob >= random)
+	{
+		printf("Packet dropped\n");
+		n=-2;     
+       	}
+       return n;
+}
 
