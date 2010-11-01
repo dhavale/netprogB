@@ -38,16 +38,6 @@ void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen);
 
 int isSeqRecieved(int seq, struct udp_datagram * recv_buffer,int size);
 
-#if 0
-struct interface_info {
-char ifi_name[IFI_NAME];	/* interface name, null-terminated */
-struct sockaddr_in ifi_addr;	/* primary address */
-struct sockaddr_in ifi_net_mask; /* destination address */
-struct sockaddr_in ifi_subnet_addr; /* obtained by anding of ip and subnet*/
-int	sockfd;
-struct interface_info *ifi_next;	/* next of these structures */
-};
-void err_sys_p(const char *);
-#endif
+
 
 #endif /* CLIENT_H_ */
