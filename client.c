@@ -5,17 +5,20 @@
  *      Author: kaduparag
  */
 
-#include	"server.h"
-
+//#include	"server.h"
+#include "common_lib.h"
+#include "client.h"
+#include "np_queue.h"
 //Global
 char serverIP[INET_ADDRSTRLEN];
+float drop_probability;
 int server_port, max_win_size;
 int TIMEOUT_SEC=1;
 int TIMEOUT_USEC=0;
 char required_file_name[FILE_NAME_LEN];
 struct sockaddr_in cliaddr;
+int seed_val;
 
-void dg_cli(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen);
 
 int main(int argc, char **argv) {
 	int sockfd;
@@ -79,7 +82,31 @@ int main(int argc, char **argv) {
 		err_sys_p("Invalid or missing input configuration.");
 	}
 
-	fclose(fp);
+	if (fgets(line, sizeof(line), fp)) {//Line 5 random seed value.
+               seed_val = atoi(line);
+               if (seed_val == 0) {
+                       err_sys("Invalid or missing seed value in the configuration file.");
+               }
+               printf("[INFO] Seed Value:%d\n", seed_val);
+
+       } else {
+               err_sys("Invalid or missing input configuration.");
+       }
+
+       if (fgets(line, sizeof(line), fp)) {//Line 6 drop probability.
+               sscanf(line, "%f", &drop_probability);
+               if (drop_probability > 1.0) {
+                       err_sys(
+                                       "Invalid or missing drop probability in the configuration file.");
+               }
+               printf("[INFO] Drop probability:%f\n", drop_probability);
+       } else {
+               err_sys("Invalid or missing input configuration.");
+       }
+       fclose(fp);
+
+       //Set random seed value
+       srand(seed_val);
 
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
@@ -122,19 +149,22 @@ int main(int argc, char **argv) {
 	}
 	
 
-	dg_cli(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr));
+	dg_client(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 
 	exit(0);
 }
 
-void dg_cli(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) {
-	int n,connection_sockfd,attempt_count,success_flag;
+void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) {
+	int n,connection_sockfd,attempt_count,success_flag,last_read=0;
 	char sendline[MAXLINE], recvline[MAXLINE + 1];
 	struct sockaddr_in servaddr;
 	struct udp_datagram *recv_buffer = (struct udp_datagram *)malloc(sizeof(struct udp_datagram));
+	struct udp_datagram *recv_item;
 	struct udp_ack *client_ack = (struct udp_ack*)malloc(sizeof(struct udp_ack));
 	//Bind and print client socket addr.
 	cliaddr.sin_addr.s_addr = htonl(cliaddr.sin_addr.s_addr);
+	struct np_queue *q = createQueue(max_win_size);
+	q->front=0; q->rear=max_win_size -1;
 
 	printf("\nClient will use: %s\n",inet_ntoa(cliaddr.sin_addr));
 	cliaddr.sin_family = AF_INET;
@@ -198,33 +228,57 @@ void dg_cli(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) {
 	printf("%s\n",sendline);
 	//	fflush(NULL);
 	//Read the file and print output.
+	printf("file send using probability: %f",drop_probability);
 	while (1) {
-
+		
 		bzero(recv_buffer,sizeof(struct udp_datagram));
-		if ((n = read(connection_sockfd, recv_buffer, sizeof(struct udp_datagram))) == -1)
+		if ((n = myreadl(connection_sockfd, recv_buffer, sizeof(struct udp_datagram),drop_probability)) == -1)
 			err_sys_p("Read error. Server is unreachable");
-		else if (n < 512){
-			printf("%d bytes recieved\n",n);
-			n=write(fileno(stdout),recv_buffer->data,n-4);
-			client_ack->seq_ack_num++; 
-			if (write(connection_sockfd, client_ack, sizeof(struct udp_ack)) != sizeof(struct udp_ack)) {
-				err_sys("Write error.Server is unreachable");
+		else if(n==-2)/* packet should be dropped*/
+			continue;
+		else {
+			/**Last packet handling*/
+			printf("%d bytes recieved seq=%d \n",n,recv_buffer->seq_num);
+			recv_buffer->seq_num--; /* decrement seq_num as queue is 0 indexed*/
+			if(recv_buffer->seq_num<q->front)
+			{
+				printf("Delayed packet, have data, skip this but send ack..\n");
+				client_ack->seq_ack_num= q->front+1;
+				client_ack->adv_wnd = q->rear - q->front +1; 
+				if (mywritel(connection_sockfd, client_ack, sizeof(struct udp_ack),drop_probability) != sizeof(struct udp_ack)) {
+					err_sys_p("Write error.Server is unreachable");
+				}
+
 			}
-			break;
+			else {
+//			n=write(fileno(stdout),recv_buffer->data,n-4);
+				recv_item = queueItem(q,recv_buffer->seq_num);
+				bzero(recv_item,sizeof(struct udp_datagram));
+				memcpy(recv_item,recv_buffer,sizeof(struct udp_datagram));
+				setFlag(q,recv_item->seq_num);
+				q->front= moveFront(q);
+				client_ack->seq_ack_num= q->front+1;
+				client_ack->adv_wnd = q->rear - q->front +1; 
+				if (mywritel(connection_sockfd, client_ack, sizeof(struct udp_ack),drop_probability) != sizeof(struct udp_ack)) {
+					err_sys_p("Write error.Server is unreachable");
+				}
+				/*consumer code*/
+				if(q->front!=0)
+				{
+					
+					while(last_read<q->front)
+					{
+						/*Read from last_read*/
+						printf("[CONS]: reading %d\n",last_read);
+						clearFlag(q,last_read);
+						q->rear=moveRear(q);
+						last_read++;
+					}
+				}
+			}
 		}
 		
-		n=write(fileno(stdout),recv_buffer->data,n-4);
-		printf("%d bytes recieved\n",n);
-
-		//send ACK
-		/*int len = strlen(sendline);
-		if (write(connection_sockfd, sendline, len) != len) {
-			err_sys("Write error.Server is unreachable");
-		}*/
-		client_ack->seq_ack_num++; 
-		if (write(connection_sockfd, client_ack, sizeof(struct udp_ack)) != sizeof(struct udp_ack)) {
-			err_sys("Write error.Server is unreachable");
-		}
+		if(n<512) break; /*last packet has been processed*/
 	}
 	printf("[INFO] File transfer completed.\n");
 }

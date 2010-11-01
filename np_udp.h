@@ -10,7 +10,7 @@ struct udp_datagram{
 
 struct udp_ack{
 	int seq_ack_num;
-	int cwnd;
+	int adv_wnd;
 };
 
 
