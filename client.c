@@ -201,12 +201,12 @@ int main(int argc, char **argv) {
 	
 	    
 
-	dg_client(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr));
+	dg_client(sockfd, &servaddr, sizeof(servaddr));
 
 	exit(0);
 }
 
-void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) {
+void dg_client(int sockfd, const struct sockaddr_in *pservaddr, socklen_t servlen) {
 	int n,connection_sockfd,attempt_count,success_flag;
 	char sendline[MAXLINE], recvline[MAXLINE + 1];
 	struct sockaddr_in servaddr;
@@ -266,9 +266,11 @@ void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) 
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(atoi(recvline));
-	if (inet_pton(AF_INET, serverIP, &servaddr.sin_addr) != 1)
-		err_sys_p("Cannot convert string IP to binary IP.");
+	servaddr.sin_addr = pservaddr->sin_addr;
 
+/*	if (inet_pton(AF_INET, serverIP, &servaddr.sin_addr) != 1)
+		err_sys_p("Cannot convert string IP to binary IP.");
+*/
 	connection_sockfd = sockfd;
 	if (connect(connection_sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
 

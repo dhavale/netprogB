@@ -34,7 +34,7 @@
 #define	min(a,b)	((a) < (b) ? (a) : (b))
 #define	max(a,b)	((a) > (b) ? (a) : (b))
 
-void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen);
+void dg_client(int sockfd, const struct sockaddr_in *pservaddr, socklen_t servlen);
 
 int isSeqRecieved(int seq, struct udp_datagram * recv_buffer,int size);
 
