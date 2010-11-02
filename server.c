@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include "common_lib.h"
 #include "np_queue.h"
+#include "myunprtt.h"
 //---------------------------GLOBAL----------------------------------------------------
 int interfaceCount = 0;
 int socketDescriptors[MAX_INTERFACE];//TODO Make MAX_INTERFACE dynamic by using getInterfaceInfo().
@@ -34,7 +35,7 @@ int main(int argc, char **argv) {
 	int maxfdp1,j;
 	fd_set rset;
 	int maxSocketDescriptor = -999;
-	char serverIP[INET_ADDRSTRLEN];
+	//char serverIP[INET_ADDRSTRLEN];
 
 	printf("<start>\n");
 
@@ -143,9 +144,14 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	struct np_queue *q;
 	int adv_wnd=12, cong_wnd=1, eff_wnd,ssthresh=65535,processed_acks;
 	struct udp_ack *ack_buff = (struct udp_ack*)malloc(50*sizeof(struct udp_ack));
+	int items,start_msec,end_of_file=-1;
+	struct rtt_info rttinfo;
+	
+	my_rtt_init(&rttinfo);
+
 	printf("pid: %d\n",getpid());
 	q = createQueue(max_win_size);
-	int items;
+	
 
 	sendline = malloc(MAXLINE);
 	recvline = malloc(MAXLINE);
@@ -233,7 +239,7 @@ int mydg_echo(int sockfd,const char * myaddr) {
 
 	success_flag=0;
 	for(attempt_count=0;attempt_count<MAX_ATTEMPT;attempt_count++){
-       if(readable_timeout(connection_sockfd,TIMEOUT_SEC,TIMEOUT_USEC)==0){
+       if(readable_timeout(connection_sockfd,TIMEOUT_SEC*1000)==0){
           printf("Socket timeout...attempt %d failed.\n",attempt_count);
           //Send the new connection socket ephemeral port.
           	if ((n = sendto(sockfd, con_sock_port, strlen(con_sock_port), 0, (struct sockaddr *) &cliaddr,
@@ -266,7 +272,9 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	if(fsocket<0)
 		err_sys_p("Unable to open file");
 	//prev_ack = 0;
-	
+	processed_acks=0;
+	ssthresh = adv_wnd;
+	start_msec=0;
 	do {
 		eff_wnd = min(cong_wnd,adv_wnd)- q->size;
 		printf("\neff_wnd=%d cong_wnd=%d adv_wnd=%d out_seg=%d\n",
@@ -291,6 +299,12 @@ int mydg_echo(int sockfd,const char * myaddr) {
 			{
 				//printf("sending % d bytes\n",num_bytes_read+4);
 				printf("Sending packet %d\n",sender_buffer->seq_num);
+				if(i==0){
+					start_msec= my_rtt_ts(&rttinfo);					
+					my_rtt_newpack(&rttinfo);
+				}
+				
+					printf("for %d numbytesread=%d\n",sender_buffer->seq_num,num_bytes_read);
 				if (sendto(connection_sockfd, sender_buffer, num_bytes_read+4, 0, (struct sockaddr *) &cliaddr, clilen) != (num_bytes_read+4)) {
 					 //using the parent listening socket
 					err_sys_p("Data send error.");
@@ -298,9 +312,13 @@ int mydg_echo(int sockfd,const char * myaddr) {
 			}
 			/**if last packet has been sent, break.*/
 			if(num_bytes_read < sizeof(sender_buffer->data))
-				break; 
+				{
+					end_of_file = sender_buffer->seq_num;
+					break;
+				} 
 		}		
 		 eff_wnd=0;
+			
 		// processed_acks=0;
 //-----For loop for acks
 		printf("Ack cycle-----\n");
@@ -309,18 +327,34 @@ int mydg_echo(int sockfd,const char * myaddr) {
 		sender_buffer = queueItem(q,q->front);
 		success_flag = 0;
        		for (attempt_count = 0; attempt_count < MAX_ATTEMPT; attempt_count++) {
-        	       if (readable_timeout(connection_sockfd, TIMEOUT_SEC, TIMEOUT_USEC) == 0) {
-        	               printf("Socket timeout attempt %d failed, slow start cong_wnd=1 process ack=0.\n", attempt_count);
+        	       if (readable_timeout(connection_sockfd, rttinfo.rtt_rto) == 0) {
+        	               printf("Socket timeout attempt %d failed sending %d, slow start cong_wnd=1 process ack=0.\n", attempt_count,
+								sender_buffer->seq_num);
 				/*loss event, enter into slow start*/
+				my_rtt_timeout(&rttinfo);
+				my_rtt_debug(&rttinfo);
 				ssthresh = cong_wnd/2;
 				cong_wnd=1;
 				if(ssthresh<cong_wnd)
 					ssthresh=cong_wnd;
 				processed_acks=0;
-        	               if (sendto(connection_sockfd, sender_buffer, num_bytes_read+4, 0,
-					 (struct sockaddr *) &cliaddr, clilen) != (num_bytes_read+4)) { //using the parent 	listening socket
-					err_sys_p("Data send error.");
-				}
+			 	if((num_bytes_read< sizeof(sender_buffer->data))&&(end_of_file==sender_buffer->seq_num)){
+					
+
+						if (sendto(connection_sockfd, sender_buffer, num_bytes_read+4, 0,
+							 (struct sockaddr *) &cliaddr, clilen) != (num_bytes_read+4)) { //using the parent 	listening socket
+							err_sys_p("Data send error.");
+						}					
+					}
+					else {
+							if (sendto(connection_sockfd, sender_buffer, 512, 0,
+								 (struct sockaddr *) &cliaddr, clilen) != 512) { //using the parent 	listening socket
+								err_sys_p("Data send error.");
+							}
+					}
+				
+
+        	               
         	       } else {
         	               success_flag = 1;
         	               break;
@@ -342,31 +376,38 @@ int mydg_echo(int sockfd,const char * myaddr) {
 				
 				for(j=0;j<items;j++)
 				{
+					if(j==0)
+					{
+						start_msec = my_rtt_ts(&rttinfo)-start_msec;
+						my_rtt_stop(&rttinfo,start_msec);
+						my_rtt_newpack(&rttinfo);
+				//		printf("rttinfo->rtt_rto = %d diff_msec=%d\n",rttinfo.rtt_rto,start_msec);
+					}
 					client_ack = &ack_buff[j];
 					printf("ACK-> Seq:%d adv_wnd:%d\n",client_ack->seq_ack_num,client_ack->adv_wnd);
 					adv_wnd = client_ack->adv_wnd;
 					if(cong_wnd<=ssthresh){
 						cong_wnd+=1; /*exponential increase for slow start*/
-						printf("[MODE]:Slow start cong_wnd=%d\n",cong_wnd);
+				//		printf("[MODE]:Slow start cong_wnd=%d\n",cong_wnd);
 					}
 					else
 					{    /*Congestion avoidance*/
 						processed_acks++;
 						if(processed_acks==cong_wnd){
-							printf("processed acks match cong_wnd = %d resetting prockacks=0\n",
-										cong_wnd);							
+				//			printf("processed acks match cong_wnd = %d resetting prockacks=0\n",
+				//						cong_wnd);							
 							cong_wnd+=1;
 							processed_acks=0;
 						}					
-						printf("[MODE]:congestion avoidance cong_wnd=%d proc_acks=%d\n",
-									cong_wnd,processed_acks);
+				//		printf("[MODE]:congestion avoidance cong_wnd=%d proc_acks=%d\n",
+				//					cong_wnd,processed_acks);
 					}
 					if(client_ack->seq_ack_num==(q->front+1))
 						dup_acks++;
 					else dup_acks=0;
 					if(dup_acks==2)
 					{
-						printf("Fast retransmit code sending %d! \n",client_ack->seq_ack_num);
+				//		printf("Fast retransmit code sending %d! \n",client_ack->seq_ack_num);
 						cong_wnd=ssthresh;
 						sender_buffer=queueItem(q,client_ack->seq_ack_num);
 						               if (sendto(connection_sockfd, sender_buffer, num_bytes_read+4, 0,

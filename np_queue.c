@@ -66,12 +66,14 @@ int isDataRecv(struct np_queue* que,int index)
 int setFlag(struct np_queue* que,int index)
 {
 	que->data_flag[index%que->max_size]=1;	
+	return 0;
 }
 
 int clearFlag(struct np_queue* que,int index)
 {
 	if(index>=0)
 	que->data_flag[index%que->max_size]=0;
+	return 0;
 }
 
 

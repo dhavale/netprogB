@@ -25,7 +25,7 @@ int isIPAddress(const char *addr);
 char * Sock_ntop(const struct sockaddr *sa, socklen_t salen);
 char * sock_ntop(const struct sockaddr *sa, socklen_t salen);
 void err_sys_p(const char * msg);
-int readable_timeout(int fd, int sec,int usec);
+int readable_timeout(int fd, int msec);
 void insertClient(struct client_info **clientListHead, unsigned int client_ip,
                unsigned short int client_port);
 void deleteClient(struct client_info **clientListHead, unsigned int client_ip,

@@ -9,6 +9,8 @@
 #include "common_lib.h"
 #include "client.h"
 #include "np_queue.h"
+#include <pthread.h>
+#include <math.h>
 //Global
 char serverIP[INET_ADDRSTRLEN];
 float drop_probability;
@@ -18,7 +20,46 @@ int TIMEOUT_USEC=0;
 char required_file_name[FILE_NAME_LEN];
 struct sockaddr_in cliaddr;
 int seed_val;
+int end_of_file=999999;
+int mean_mue;
+pthread_mutex_t protect_queue = PTHREAD_MUTEX_INITIALIZER;
 
+
+void* consumer_thrd_func(void*data)
+{
+	struct np_queue * q = (struct np_queue*)data;
+	int last_read=0;
+	double sleep_time=0;
+	float random;
+	while(1)
+	{
+	pthread_mutex_lock(&protect_queue);
+		
+	if(q->front!=0)
+				{
+					
+					while(last_read<=q->front)
+					{
+						/*Read from last_read*/
+						printf("[CONS]: reading %d\n",last_read);
+						clearFlag(q,last_read);
+						q->rear=moveRear(q);
+						last_read++;
+					}
+				}
+	if(end_of_file<q->front)
+			break;
+	pthread_mutex_unlock(&protect_queue);
+	random = (float)rand()/RAND_MAX;
+	if(random==0)
+		random=0.3;
+	sleep_time = -1 *mean_mue* log(random);
+	//printf("\ngonna sleep for %lf in ms %d for %lf log is %lf",sleep_time,(int)ceil(sleep_time/1000),random,log(random));
+	sleep((int)ceil(sleep_time/1000));
+	}	
+		pthread_mutex_unlock(&protect_queue);
+	return NULL;
+}
 
 int main(int argc, char **argv) {
 	int sockfd;
@@ -84,8 +125,8 @@ int main(int argc, char **argv) {
 
 	if (fgets(line, sizeof(line), fp)) {//Line 5 random seed value.
                seed_val = atoi(line);
-               if (seed_val == 0) {
-                       err_sys("Invalid or missing seed value in the configuration file.");
+               if (seed_val < 0) {
+                       err_sys_p("Invalid or missing seed value in the configuration file.");
                }
                printf("[INFO] Seed Value:%d\n", seed_val);
 
@@ -100,6 +141,16 @@ int main(int argc, char **argv) {
                                        "Invalid or missing drop probability in the configuration file.");
                }
                printf("[INFO] Drop probability:%f\n", drop_probability);
+       } else {
+               err_sys("Invalid or missing input configuration.");
+       }
+	if (fgets(line, sizeof(line), fp)) {//Line 7 mean "mue"
+               sscanf(line, "%d", &mean_mue);
+               if (mean_mue  < 0) {
+                       err_sys_p(
+                                       "Invalid or missing mean mue in the configuration file.");
+               }
+               printf("[INFO] Mean Mue:%d\n", mean_mue);
        } else {
                err_sys("Invalid or missing input configuration.");
        }
@@ -148,6 +199,7 @@ int main(int argc, char **argv) {
 
 	}
 	
+	    
 
 	dg_client(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 
@@ -155,16 +207,19 @@ int main(int argc, char **argv) {
 }
 
 void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) {
-	int n,connection_sockfd,attempt_count,success_flag,last_read=0;
+	int n,connection_sockfd,attempt_count,success_flag;
 	char sendline[MAXLINE], recvline[MAXLINE + 1];
 	struct sockaddr_in servaddr;
 	struct udp_datagram *recv_buffer = (struct udp_datagram *)malloc(sizeof(struct udp_datagram));
 	struct udp_datagram *recv_item;
 	struct udp_ack *client_ack = (struct udp_ack*)malloc(sizeof(struct udp_ack));
+	pthread_t consumer_thread;
 	//Bind and print client socket addr.
 	cliaddr.sin_addr.s_addr = htonl(cliaddr.sin_addr.s_addr);
 	struct np_queue *q = createQueue(max_win_size);
 	q->front=0; q->rear=max_win_size -1;
+
+	pthread_create(&consumer_thread,NULL,consumer_thrd_func,q);
 
 	printf("\nClient will use: %s\n",inet_ntoa(cliaddr.sin_addr));
 	cliaddr.sin_family = AF_INET;
@@ -187,7 +242,7 @@ void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) 
 
 	success_flag=0;
 	for(attempt_count=0;attempt_count<MAX_ATTEMPT;attempt_count++){
-       if(readable_timeout(sockfd,TIMEOUT_SEC,TIMEOUT_USEC)==0){
+       if(readable_timeout(sockfd,TIMEOUT_SEC*1000)==0){
           printf("Socket timeout...attempt %d failed.\n",attempt_count);
           if (write(sockfd, required_file_name, len) != len) { //Try again
           		err_sys_p("Write error.Server is unreachable");
@@ -237,14 +292,17 @@ void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) 
 		else if(n==-2)/* packet should be dropped*/
 			continue;
 		else {
-			/**Last packet handling*/
+			
 			printf("%d bytes recieved seq=%d \n",n,recv_buffer->seq_num);
 			recv_buffer->seq_num--; /* decrement seq_num as queue is 0 indexed*/
+
 			if(recv_buffer->seq_num<q->front)
 			{
 				printf("Delayed packet, have data, skip this but send ack..\n");
 				client_ack->seq_ack_num= q->front+1;
-				client_ack->adv_wnd = q->rear - q->front +1; 
+				pthread_mutex_lock(&protect_queue);
+					client_ack->adv_wnd = q->rear - q->front +1; 
+				pthread_mutex_unlock(&protect_queue);			
 				if (mywritel(connection_sockfd, client_ack, sizeof(struct udp_ack),drop_probability) != sizeof(struct udp_ack)) {
 					err_sys_p("Write error.Server is unreachable");
 				}
@@ -258,27 +316,37 @@ void dg_client(int sockfd, const struct sockaddr *pservaddr, socklen_t servlen) 
 				setFlag(q,recv_item->seq_num);
 				q->front= moveFront(q);
 				client_ack->seq_ack_num= q->front+1;
-				client_ack->adv_wnd = q->rear - q->front +1; 
+				pthread_mutex_lock(&protect_queue);
+					client_ack->adv_wnd = q->rear - q->front +1; 
+				pthread_mutex_unlock(&protect_queue);
 				if (mywritel(connection_sockfd, client_ack, sizeof(struct udp_ack),drop_probability) != sizeof(struct udp_ack)) {
 					err_sys_p("Write error.Server is unreachable");
 				}
 				/*consumer code*/
-				if(q->front!=0)
-				{
-					
-					while(last_read<q->front)
-					{
-						/*Read from last_read*/
-						printf("[CONS]: reading %d\n",last_read);
-						clearFlag(q,last_read);
-						q->rear=moveRear(q);
-						last_read++;
-					}
-				}
+				
 			}
 		}
 		
-		if(n<512) break; /*last packet has been processed*/
+		if(n<512)
+		{
+			pthread_mutex_lock(&protect_queue);
+			end_of_file=recv_buffer->seq_num;  /*last packet has been processed*/
+			pthread_mutex_unlock(&protect_queue);
+		}
+		if(end_of_file< q->front)
+			break;
 	}
+/*TIME_WAIT State handling*/
+       if(readable_timeout(connection_sockfd,5000)!=0){
+          printf("TIME wait activated sending ack %d.\n",end_of_file);
+		client_ack->seq_ack_num= end_of_file+2;
+		if (mywritel(connection_sockfd, client_ack, sizeof(struct udp_ack),drop_probability) != sizeof(struct udp_ack)) {
+					err_sys_p("Write error.Server is unreachable");
+				}
+       }
+	
+		//while()
+	pthread_join(consumer_thread,NULL);
+
 	printf("[INFO] File transfer completed.\n");
 }
