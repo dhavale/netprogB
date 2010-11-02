@@ -67,15 +67,15 @@ void insertClient(struct client_info **clientListHead, unsigned int client_ip,
 
 
 
-int readable_timeout(int fd, int sec,int usec) {
+int readable_timeout(int fd, int msec) {
 	fd_set rset;
 	struct timeval tv;
 
 	FD_ZERO(&rset);
 	FD_SET(fd, &rset);
 
-	tv.tv_sec = sec;
-	tv.tv_usec = usec;
+	tv.tv_sec = msec/1000;
+	tv.tv_usec = (msec%1000)*1000;
 
 	return (select(fd + 1, &rset, NULL, NULL, &tv));
 	/* 4> 0 if descriptor is readable */
@@ -275,7 +275,7 @@ int myreadl(int sockfd, void * recvline, int maxline,float drop_prob) {
 	n = read(sockfd, recvline, maxline);
        if(drop_prob >= random)
 	{
-		printf("%d Packet dropped\n",*(int*)recvline);
+		printf("%d Packet dropped len %d\n",*(int*)recvline,n);
 		n=-2;     
        	}
        return n;
