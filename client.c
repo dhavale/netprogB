@@ -23,7 +23,7 @@ int seed_val;
 int end_of_file=999999;
 int mean_mue;
 pthread_mutex_t protect_queue = PTHREAD_MUTEX_INITIALIZER;
-
+int quit=0;
 
 void* consumer_thrd_func(void*data)
 {
@@ -38,16 +38,21 @@ void* consumer_thrd_func(void*data)
 	if(q->front!=0)
 				{
 					
-					while(last_read<=q->front)
+					while((last_read<q->front)&&(!quit))
 					{
 						/*Read from last_read*/
-						printf("[CONS]: reading %d\n",last_read);
+						printf("\n\t-=-=-=-=-=-=-=-=-=-=-[CONS]:reading %d-=-=-=-=-=-=-=--=-=\t\n",
+											last_read+1);
+						if(write(fileno(stdout),queueItem(q,last_read)->data,
+								sizeof(q->send_buff->data))<0)
+						err_sys_p("stdout error!!");
+						printf("\n\t-=-=-=-=-=-=-=-=-=-=-[CONS]:End of read-=-=-=-=-=-=-=--=-=\t\n");
 						clearFlag(q,last_read);
 						q->rear=moveRear(q);
 						last_read++;
 					}
 				}
-	if(end_of_file<q->front)
+	if(end_of_file<q->front||quit)
 			break;
 	pthread_mutex_unlock(&protect_queue);
 	random = (float)rand()/RAND_MAX;
@@ -68,6 +73,9 @@ int main(int argc, char **argv) {
 	struct interface_info *head;
 	struct sockaddr_in closest;
 	generate_ifi_list(&head);
+	
+	print_my_list(head);
+
 	int ret;
 
 	//	if (argc != 2) //TODO Uncomment
@@ -84,7 +92,7 @@ int main(int argc, char **argv) {
 		if (!isIPAddress(serverIP)) {
 			err_sys_p("Invalid or missing server ip in the configuration file.");
 		}
-		printf("[INFO] Server ip:%s\n", serverIP);
+//		printf("[INFO] Server ip:%s\n", serverIP);
 	} else {
 		err_sys_p("Invalid or missing input configuration.");
 	}
@@ -95,7 +103,7 @@ int main(int argc, char **argv) {
 			err_sys(
 					"Invalid or missing server port number in the configuration file.");
 		}
-		printf("[INFO] Server port:%d\n", server_port);
+//		printf("[INFO] Server port:%d\n", server_port);
 	} else {
 		err_sys_p("Invalid or missing input configuration.");
 	}
@@ -107,7 +115,7 @@ int main(int argc, char **argv) {
 		strcpy(required_file_name, line);
 		if (len == 0)
 			err_sys("Invalid or missing file name in the configuration file.");
-		printf("[INFO] File name:%s\n", required_file_name);
+//		printf("[INFO] File name:%s\n", required_file_name);
 	} else {
 		err_sys_p("Invalid or missing input configuration.");
 	}
@@ -118,7 +126,7 @@ int main(int argc, char **argv) {
 			err_sys_p(
 					"Invalid or missing Max win size in the configuration file.");
 		}
-		printf("[INFO] Max win size:%d\n", max_win_size);
+//		printf("[INFO] Max win size:%d\n", max_win_size);
 	} else {
 		err_sys_p("Invalid or missing input configuration.");
 	}
@@ -128,7 +136,7 @@ int main(int argc, char **argv) {
                if (seed_val < 0) {
                        err_sys_p("Invalid or missing seed value in the configuration file.");
                }
-               printf("[INFO] Seed Value:%d\n", seed_val);
+  //             printf("[INFO] Seed Value:%d\n", seed_val);
 
        } else {
                err_sys("Invalid or missing input configuration.");
@@ -140,7 +148,7 @@ int main(int argc, char **argv) {
                        err_sys(
                                        "Invalid or missing drop probability in the configuration file.");
                }
-               printf("[INFO] Drop probability:%f\n", drop_probability);
+    //           printf("[INFO] Drop probability:%f\n", drop_probability);
        } else {
                err_sys("Invalid or missing input configuration.");
        }
@@ -150,7 +158,7 @@ int main(int argc, char **argv) {
                        err_sys_p(
                                        "Invalid or missing mean mue in the configuration file.");
                }
-               printf("[INFO] Mean Mue:%d\n", mean_mue);
+      //         printf("[INFO] Mean Mue:%d\n", mean_mue);
        } else {
                err_sys("Invalid or missing input configuration.");
        }
@@ -208,35 +216,60 @@ int main(int argc, char **argv) {
 
 void dg_client(int sockfd, const struct sockaddr_in *pservaddr, socklen_t servlen) {
 	int n,connection_sockfd,attempt_count,success_flag;
+	socklen_t addrlen;
 	char sendline[MAXLINE], recvline[MAXLINE + 1];
 	struct sockaddr_in servaddr;
 	struct udp_datagram *recv_buffer = (struct udp_datagram *)malloc(sizeof(struct udp_datagram));
 	struct udp_datagram *recv_item;
 	struct udp_ack *client_ack = (struct udp_ack*)malloc(sizeof(struct udp_ack));
 	pthread_t consumer_thread;
-	//Bind and print client socket addr.
+	char handshake[52]={};
 	cliaddr.sin_addr.s_addr = htonl(cliaddr.sin_addr.s_addr);
 	struct np_queue *q = createQueue(max_win_size);
 	q->front=0; q->rear=max_win_size -1;
 
 	pthread_create(&consumer_thread,NULL,consumer_thrd_func,q);
 
-	printf("\nClient will use: %s\n",inet_ntoa(cliaddr.sin_addr));
 	cliaddr.sin_family = AF_INET;
 	cliaddr.sin_port = htons(0);
 	if (bind(sockfd, (struct sockaddr *) &cliaddr,sizeof(cliaddr)))
 		err_sys_p("Coudlnt bind socket.");
 
-    printf("[INFO] Bounded to %s\n", (char*)Sock_ntop((struct sockaddr * ) &cliaddr,sizeof(cliaddr)));
+   // printf("[INFO] Bounded to %s\n", (char*)Sock_ntop((struct sockaddr * ) &cliaddr,sizeof(cliaddr)));
+	addrlen=sizeof(cliaddr);
+	//Get the ephemeral port  number.
+	getsockname(sockfd, (struct sockaddr *) &cliaddr, &addrlen);
+//	printf( "%d",  ntohs(localaddr.sin_port));
+
+	//Print connection socket information
+	//printf("[INFO] Connection socket IP %s", myaddr);
+	
+	printf("\nClient bound to: %s ",inet_ntoa(cliaddr.sin_addr));
+	printf(", ephemeral port %d\n", ntohs(cliaddr.sin_port));
+
+
 
 	//Connect to well known port of the server
 	if (connect(sockfd, (struct sockaddr *) pservaddr, servlen) < 0) {
 		err_sys_p("Connect error");
 	}
+	addrlen=sizeof(servaddr);
+	//Get the ephemeral port  number.
+	getpeername(sockfd, (struct sockaddr *) &servaddr, &addrlen);
+//	printf( "%d",  ntohs(localaddr.sin_port));
 
-	//Send the filename as datagram
-	int len = strlen(required_file_name);
-	if (write(sockfd, required_file_name, len) != len) {
+	//Print connection socket information
+	//printf("[INFO] Connection socket IP %s", myaddr);
+	
+	printf("\nConnected to Server: %s ",inet_ntoa(servaddr.sin_addr));
+	printf(", well-known port %d\n", ntohs(servaddr.sin_port));
+
+
+
+	//Send the filename and max_window_size as datagram
+	sprintf(handshake,"%s %d",required_file_name,max_win_size);
+	int len = strlen(handshake);
+	if (mywritel(sockfd, handshake, len,drop_probability) != len) {
 		err_sys_p("Write error.Server is unreachable");
 	}
 
@@ -244,7 +277,7 @@ void dg_client(int sockfd, const struct sockaddr_in *pservaddr, socklen_t servle
 	for(attempt_count=0;attempt_count<MAX_ATTEMPT;attempt_count++){
        if(readable_timeout(sockfd,TIMEOUT_SEC*1000)==0){
           printf("Socket timeout...attempt %d failed.\n",attempt_count);
-          if (write(sockfd, required_file_name, len) != len) { //Try again
+          if (mywritel(sockfd, handshake, len,drop_probability) != len) { //Try again
           		err_sys_p("Write error.Server is unreachable");
           	}
        }else{
@@ -261,8 +294,8 @@ void dg_client(int sockfd, const struct sockaddr_in *pservaddr, socklen_t servle
 		err_sys_p("Read error. Server is unreachable");
 
 	recvline[n] = 0; // null terminate
-	fputs(recvline, stdout);
-
+	printf("Connected to servers ephemeral port %s\n",recvline);
+	printf("\n");
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(atoi(recvline));
@@ -279,16 +312,40 @@ void dg_client(int sockfd, const struct sockaddr_in *pservaddr, socklen_t servle
 
 	//Send connected ack
 	strcpy(sendline, "ACK_CONNECTED");
-	if (write(connection_sockfd, sendline, strlen(sendline)) != strlen(sendline)) {
+	if (mywritel(connection_sockfd, sendline, strlen(sendline),drop_probability) != strlen(sendline)) {
 		err_sys_p("Write error.Server is unreachable");
 	}
-	printf("%s\n",sendline);
+//	printf("%s\n",sendline);
+	success_flag=0;
+	for(attempt_count=0;attempt_count<MAX_ATTEMPT;attempt_count++){
+       	if(readable_timeout(connection_sockfd,TIMEOUT_SEC*1000)==0){
+          printf("Socket timeout...attempt %d failed.\n",attempt_count);
+          if (mywritel(connection_sockfd, sendline, strlen(sendline),drop_probability) != strlen(sendline)) { //Try again
+          		err_sys_p("Write error.Server is unreachable");
+          	}
+       	}else{
+    	   success_flag=1;
+         break;
+       }
+	}
+	 if(success_flag==0){//TODO what to do if MAX_ATTEMT fail? report and end prgm?
+	        err_sys_p("Socket timeout...max no. of attempt failed.\n");
+	 }
+
 	//	fflush(NULL);
 	//Read the file and print output.
-	printf("file send using probability: %f",drop_probability);
+//	printf("file send using probability: %f",drop_probability);
 	while (1) {
 		
 		bzero(recv_buffer,sizeof(struct udp_datagram));
+
+       	if(readable_timeout(connection_sockfd,5000)==0){
+
+		printf("Waited long enough, client exiting safely..\n");
+		quit=1;
+	pthread_join(consumer_thread,NULL);
+		exit(0);
+	}
 		if ((n = myreadl(connection_sockfd, recv_buffer, sizeof(struct udp_datagram),drop_probability)) == -1)
 			err_sys_p("Read error. Server is unreachable");
 		else if(n==-2)/* packet should be dropped*/
@@ -340,7 +397,7 @@ void dg_client(int sockfd, const struct sockaddr_in *pservaddr, socklen_t servle
 	}
 /*TIME_WAIT State handling*/
        if(readable_timeout(connection_sockfd,5000)!=0){
-          printf("TIME wait activated sending ack %d.\n",end_of_file);
+          printf("TIME wait activated sending ack %d.\n",end_of_file+2);
 		client_ack->seq_ack_num= end_of_file+2;
 		if (mywritel(connection_sockfd, client_ack, sizeof(struct udp_ack),drop_probability) != sizeof(struct udp_ack)) {
 					err_sys_p("Write error.Server is unreachable");

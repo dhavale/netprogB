@@ -6,7 +6,7 @@
 #include "unpifiplus.h"
 #include "unp.h"
 
-struct interface_info {
+struct interface_info{
 char ifi_name[IFI_NAME];	/* interface name, null-terminated */
 struct sockaddr_in ifi_addr;	/* primary address */
 struct sockaddr_in ifi_net_mask; /* destination address */

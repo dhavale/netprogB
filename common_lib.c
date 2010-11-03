@@ -13,7 +13,7 @@
        for (; client_list != NULL; client_list = client_list->next) {
                if (client_list->ipaddr == client_ip && client_list->port
                                == client_port) {
-                       printf("Client :%d %d\n",client_ip,client_port);
+//                       printf("Client :%d %d\n",client_ip,client_port);
                        return 0;
                }
        }
@@ -30,21 +30,21 @@ void printClientList(struct client_info *clientListHead) {
 void deleteClient(struct client_info **clientListHead, unsigned int client_ip,
                unsigned short int client_port) {
 
-				printf("\nrequesting delete ip:%d port:%d\n",client_ip,client_port);
+//				printf("\nrequesting delete ip:%d port:%d\n",client_ip,client_port);
        struct client_info *client_list = *clientListHead,*client_list_prev= *clientListHead;
        for (; client_list != NULL; client_list = client_list->next) {
                if ((client_list->ipaddr == client_ip) && (client_list->port
                                == client_port)) {//this is the node to be deleted.
 
-			printf("\ndeleting ip:%d port:%d\n",client_list->ipaddr,client_list->port);
+//			printf("\ndeleting ip:%d port:%d\n",client_list->ipaddr,client_list->port);
                        if(client_list==*clientListHead){//head node
                          *clientListHead=client_list->next;
                           free(client_list);
-			printf("if executed\n");
+//			printf("if executed\n");
                        }else{
                                client_list_prev->next=client_list->next;
                                free(client_list);
-			printf("else executed\n");
+//			printf("else executed\n");
                        }
                }
                client_list_prev=client_list;
@@ -197,7 +197,7 @@ int closest_match_to_interface(struct interface_info *head, char *str_ip,struct 
 	struct interface_info *match= NULL;
 	inet_aton(str_ip,&server_ip);
 	
-	printf("passed ip %s converted to 0x%x\n",str_ip,server_ip.s_addr);
+//	printf("passed ip %s converted to 0x%x\n",str_ip,server_ip.s_addr);
 
 	struct interface_info *node = head;
 

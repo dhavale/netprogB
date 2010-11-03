@@ -6,7 +6,7 @@ struct np_queue* createQueue(int max_size)
 	struct np_queue* que = (struct np_queue* )calloc(1,sizeof(struct np_queue));
 	que->send_buff = (struct udp_datagram *) calloc(max_size,sizeof(struct udp_datagram));
 	que->data_flag = (int *)calloc(max_size,sizeof(int));
-	printf("Created queue with size %d\n",max_size);
+	//printf("Created queue with size %d\n",max_size);
 	que->front =0;
 	que->rear =0;
 	que->size =0;
@@ -47,7 +47,7 @@ int setFront(struct np_queue *que,int set)
 	{
 		que->size -= (set -que->front);
 		que->front = set;
-		printf("Front is now %d\n",que->front);
+//		printf("Front is now %d\n",que->front);
 	}
 	return que->front;
 }
