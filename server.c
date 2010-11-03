@@ -100,22 +100,29 @@ int main(int argc, char **argv) {
 	printf("[INFO] Total number of interfaces: %d\n", interfaceCount);
 	//interfaceCount =1; //ugly hack
 	//Using select monitor different sockets bounded to available unicast interfaces.
+	
+		FD_ZERO(&rset);
 	for (;;) {
 		//printf("[INFO] Parent server waiting for incoming requests...\n"); //TODO Uncomment info
-		FD_ZERO(&rset);
 		for (i = 0; i < interfaceCount; i++) {
 			FD_SET(socketDescriptors[i], &rset);
 			maxSocketDescriptor = max(maxSocketDescriptor,socketDescriptors[i]);
 		}
 		maxfdp1 = maxSocketDescriptor + 1;
-		select(maxfdp1, &rset, NULL, NULL, NULL);
+		
+		if(select(maxfdp1, &rset, NULL, NULL, NULL)<0)
+		{
+			perror("Select error!");
+		}
+	
 		for (i = 0; i < interfaceCount; i++) {
 			if (FD_ISSET(socketDescriptors[i], &rset)) { // one of the socket descriptor is ready
 				//fork a child
+				printf("socket %d set",i);
 				if ((pid = fork()) == 0) { // child 
 					j=0;
 					node=ifihead;
-					while(j<i) node= node->ifi_next;
+					while(j++<i) node= node->ifi_next;
 					child_pid = mydg_echo(socketDescriptors[i],inet_ntoa(node->ifi_addr.sin_addr));
 					printf("[INFO] Child server %d closed.\n", child_pid);
 					exit(0);
