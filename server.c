@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
 			err_sys_p(
 					"Invalid or missing server port number in the configuration file.");
 		}
-		printf("[INFO] Server port:%d\n", server_port);
+//		printf("[INFO] Server port:%d\n", server_port);
 	} else {
 		err_sys_p("Invalid or missing input configuration.");
 	}
@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
 			err_sys_p(
 					"Invalid or missing Max win size in the configuration file.");
 		}
-		printf("[INFO] Max win size port:%d\n", max_win_size);
+//		printf("[INFO] Max win size:%d\n", max_win_size);
 	} else {
 		err_sys_p("Invalid or missing input configuration.");
 	}
@@ -70,6 +70,9 @@ int main(int argc, char **argv) {
 	fclose(fp);
 
 	generate_ifi_list(&ifihead);
+	
+	print_my_list(ifihead);
+
 	ifi=ifihead;	
 
 	for (; ifi != NULL; ifi = ifi->ifi_next) {
@@ -142,11 +145,11 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	struct sockaddr_in localaddr,cliaddr;
 	int num_bytes_read,fsocket,dup_acks=0,j=0;
 	struct np_queue *q;
-	int adv_wnd=12, cong_wnd=1, eff_wnd,ssthresh=65535,processed_acks;
+	int adv_wnd=0, cong_wnd=1, eff_wnd,ssthresh=65535,processed_acks;
 	struct udp_ack *ack_buff = (struct udp_ack*)malloc(50*sizeof(struct udp_ack));
 	int items,start_msec,end_of_file=-1;
 	struct rtt_info rttinfo;
-	
+	char *handshake;	
 	my_rtt_init(&rttinfo);
 
 	printf("pid: %d\n",getpid());
@@ -156,6 +159,7 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	sendline = malloc(MAXLINE);
 	recvline = malloc(MAXLINE);
 	filename = malloc(MAXLINE);
+	handshake= malloc(MAXLINE);
 	//Close all other socket descriptor
 	for (i = 0; i < interfaceCount; i++) {
 		if (socketDescriptors[i] != sockfd)
@@ -164,12 +168,15 @@ int mydg_echo(int sockfd,const char * myaddr) {
 
 	//Read filename from client
 	 clilen=sizeof(cliaddr);
-	n = recvfrom(sockfd, filename, MAXLINE, 0, (struct sockaddr *) &cliaddr, &clilen);
+	n = recvfrom(sockfd, handshake, MAXLINE, 0, (struct sockaddr *) &cliaddr, &clilen);
 	if (n < 0) {
 		err_sys_p("Data receive error.");
 	}
-	filename[n] = 0; //null terminate
+	//filename[n] = 0; //null terminate
 
+	sscanf(handshake,"%s %d",filename,&adv_wnd);
+	
+	printf("Got filename %s and adv_wnd %d\n",filename,adv_wnd); 
 	 //Get the ipaddr, port number from the client
 	       struct sockaddr_in *sin = (struct sockaddr_in *) &cliaddr;
 	
@@ -191,10 +198,10 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	}
        //Check for already active client
 	   if(isNewClient(clientListHead,sin->sin_addr.s_addr,ntohs(sin->sin_port))){
-	       printf("[DEBUG] New client...inserting\n");
+	  //     printf("[DEBUG] New client...inserting\n");
            //insert into the client list
 	       insertClient(&clientListHead,sin->sin_addr.s_addr,ntohs(sin->sin_port));
-	       printf("Client inserted:%d %d\n",clientListHead->ipaddr,clientListHead->port);
+	    //   printf("Client inserted:%d %d\n",clientListHead->ipaddr,clientListHead->port);
 	   }else{ // End this child process.Client already handled by other child process.
            	printf("[DEBUG] Client already present...\n");
           	exit(0);
@@ -333,10 +340,8 @@ int mydg_echo(int sockfd,const char * myaddr) {
 				/*loss event, enter into slow start*/
 				my_rtt_timeout(&rttinfo);
 				my_rtt_debug(&rttinfo);
-				ssthresh = cong_wnd/2;
+				ssthresh = max(cong_wnd/2,2);
 				cong_wnd=1;
-				if(ssthresh<cong_wnd)
-					ssthresh=cong_wnd;
 				processed_acks=0;
 			 	if((num_bytes_read< sizeof(sender_buffer->data))&&(end_of_file==sender_buffer->seq_num)){
 					
@@ -387,27 +392,29 @@ int mydg_echo(int sockfd,const char * myaddr) {
 					printf("ACK-> Seq:%d adv_wnd:%d\n",client_ack->seq_ack_num,client_ack->adv_wnd);
 					adv_wnd = client_ack->adv_wnd;
 					if(cong_wnd<=ssthresh){
-						cong_wnd+=1; /*exponential increase for slow start*/
-				//		printf("[MODE]:Slow start cong_wnd=%d\n",cong_wnd);
+						cong_wnd+= client_ack->seq_ack_num - q->front -1; /*exponential increase for slow start*/
+						printf("[MODE]:Slow start cong_wnd=%d\n",cong_wnd);
 					}
 					else
 					{    /*Congestion avoidance*/
-						processed_acks++;
+						processed_acks+= client_ack->seq_ack_num - q->front -1;
 						if(processed_acks==cong_wnd){
-				//			printf("processed acks match cong_wnd = %d resetting prockacks=0\n",
-				//						cong_wnd);							
+							printf("processed acks match cong_wnd = %d resetting prockacks=0\n",
+										cong_wnd);							
 							cong_wnd+=1;
 							processed_acks=0;
 						}					
-				//		printf("[MODE]:congestion avoidance cong_wnd=%d proc_acks=%d\n",
-				//					cong_wnd,processed_acks);
+						printf("[MODE]:congestion avoidance cong_wnd=%d proc_acks=%d\n",
+									cong_wnd,processed_acks);
 					}
-					if(client_ack->seq_ack_num==(q->front+1))
+					if(client_ack->seq_ack_num==(q->front+1)){
 						dup_acks++;
+						printf("dup_ack %d!\n",dup_acks);
+					}
 					else dup_acks=0;
 					if(dup_acks==2)
 					{
-				//		printf("Fast retransmit code sending %d! \n",client_ack->seq_ack_num);
+						printf("Fast retransmit code sending %d! \n",client_ack->seq_ack_num);
 						cong_wnd=ssthresh;
 						sender_buffer=queueItem(q,client_ack->seq_ack_num);
 						               if (sendto(connection_sockfd, sender_buffer, num_bytes_read+4, 0,
@@ -433,9 +440,7 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	free(sendline);
 	free(filename);
 //Client handling done. Remove from the client list
-       printClientList(clientListHead);
        deleteClient(&clientListHead,sin->sin_addr.s_addr,ntohs(sin->sin_port));
-       printClientList(clientListHead);
 	return getpid();
 }
 /* end mydg_echo */
