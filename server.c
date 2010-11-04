@@ -150,7 +150,7 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	struct in_addr closest;
 	socklen_t  addrlen,clilen;
 	struct sockaddr_in localaddr,cliaddr;
-	int num_bytes_read,fsocket,dup_acks=0,j=0;
+	int num_bytes_read=0,fsocket,dup_acks=0,j=0;
 	struct np_queue *q;
 	int adv_wnd=0, cong_wnd=1, eff_wnd,ssthresh=65535,processed_acks;
 	struct udp_ack *ack_buff = (struct udp_ack*)malloc(50*sizeof(struct udp_ack));
@@ -159,7 +159,7 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	char *handshake;	
 	my_rtt_init(&rttinfo);
 
-	printf("pid: %d\n",getpid());
+	printf("pid: %d\n",(int)getpid());
 	q = createQueue(max_win_size);
 	
 
@@ -213,7 +213,7 @@ int mydg_echo(int sockfd,const char * myaddr) {
            	printf("[DEBUG] Client already present...\n");
           	exit(0);
 	   }
-	printf("[INFO] Child server %d datagram from %s", getpid(), Sock_ntop(
+	printf("[INFO] Child server %d datagram from %s",(int) getpid(), Sock_ntop(
 			(struct sockaddr *) &cliaddr, clilen));
 	printf(", to %s\n", myaddr);
 	printf("[INFO] File requested %s\n", filename);
