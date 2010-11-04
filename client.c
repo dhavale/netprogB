@@ -59,7 +59,7 @@ void* consumer_thrd_func(void*data)
 	if(random==0)
 		random=0.3;
 	sleep_time = -1 *mean_mue* log(random);
-	//printf("\ngonna sleep for %lf in ms %d for %lf log is %lf",sleep_time,(int)ceil(sleep_time/1000),random,log(random));
+	printf("\ngonna sleep for %lf in ms %d for %lf log is %lf",sleep_time,(int)ceil(sleep_time/1000),random,log(random));
 	sleep((int)ceil(sleep_time/1000));
 	}	
 		pthread_mutex_unlock(&protect_queue);
