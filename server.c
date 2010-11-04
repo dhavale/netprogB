@@ -100,22 +100,29 @@ int main(int argc, char **argv) {
 	printf("[INFO] Total number of interfaces: %d\n", interfaceCount);
 	//interfaceCount =1; //ugly hack
 	//Using select monitor different sockets bounded to available unicast interfaces.
+	
+		FD_ZERO(&rset);
 	for (;;) {
 		//printf("[INFO] Parent server waiting for incoming requests...\n"); //TODO Uncomment info
-		FD_ZERO(&rset);
 		for (i = 0; i < interfaceCount; i++) {
 			FD_SET(socketDescriptors[i], &rset);
 			maxSocketDescriptor = max(maxSocketDescriptor,socketDescriptors[i]);
 		}
 		maxfdp1 = maxSocketDescriptor + 1;
-		select(maxfdp1, &rset, NULL, NULL, NULL);
+		
+		if(select(maxfdp1, &rset, NULL, NULL, NULL)<0)
+		{
+			perror("Select error!");
+		}
+	
 		for (i = 0; i < interfaceCount; i++) {
 			if (FD_ISSET(socketDescriptors[i], &rset)) { // one of the socket descriptor is ready
 				//fork a child
+				printf("socket %d set",i);
 				if ((pid = fork()) == 0) { // child 
 					j=0;
 					node=ifihead;
-					while(j<i) node= node->ifi_next;
+					while(j++<i) node= node->ifi_next;
 					child_pid = mydg_echo(socketDescriptors[i],inet_ntoa(node->ifi_addr.sin_addr));
 					printf("[INFO] Child server %d closed.\n", child_pid);
 					exit(0);
@@ -143,7 +150,7 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	struct in_addr closest;
 	socklen_t  addrlen,clilen;
 	struct sockaddr_in localaddr,cliaddr;
-	int num_bytes_read,fsocket,dup_acks=0,j=0;
+	int num_bytes_read=0,fsocket,dup_acks=0,j=0;
 	struct np_queue *q;
 	int adv_wnd=0, cong_wnd=1, eff_wnd,ssthresh=65535,processed_acks;
 	struct udp_ack *ack_buff = (struct udp_ack*)malloc(50*sizeof(struct udp_ack));
@@ -152,7 +159,7 @@ int mydg_echo(int sockfd,const char * myaddr) {
 	char *handshake;	
 	my_rtt_init(&rttinfo);
 
-	printf("pid: %d\n",getpid());
+	printf("pid: %d\n",(int)getpid());
 	q = createQueue(max_win_size);
 	
 
@@ -206,7 +213,7 @@ int mydg_echo(int sockfd,const char * myaddr) {
            	printf("[DEBUG] Client already present...\n");
           	exit(0);
 	   }
-	printf("[INFO] Child server %d datagram from %s", getpid(), Sock_ntop(
+	printf("[INFO] Child server %d datagram from %s",(int) getpid(), Sock_ntop(
 			(struct sockaddr *) &cliaddr, clilen));
 	printf(", to %s\n", myaddr);
 	printf("[INFO] File requested %s\n", filename);

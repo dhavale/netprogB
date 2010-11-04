@@ -228,8 +228,9 @@ int closest_match_to_interface(struct interface_info *head, char *str_ip,struct 
 	if((match!=NULL)&&!localhost)
 	{
 		printf("recommends: %s\n", inet_ntoa(match->ifi_addr.sin_addr));
-		//closest->s_addr = match->ifi_addr.sin_addr.s_addr;
-		memcpy(closest,&match->ifi_addr,sizeof(struct sockaddr_in));
+	//	closest->s_addr = match->ifi_addr.sin_addr.s_addr;
+		memcpy(closest,&match->ifi_addr.sin_addr,sizeof(struct in_addr));
+		return 2;
 	}
 	else if(localhost)
 	{
@@ -244,7 +245,7 @@ int closest_match_to_interface(struct interface_info *head, char *str_ip,struct 
 		match=head;
 		while((match!=NULL)||(match->ifi_addr.sin_addr.s_addr!=0x7f000001)) /*skip localhost*/
 			match= match->ifi_next;
-		closest->s_addr = match->ifi_addr.sin_addr.s_addr;
+		memcpy(closest,&match->ifi_addr.sin_addr,sizeof(struct in_addr));
 	}
 	
 	return 0;

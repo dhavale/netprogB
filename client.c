@@ -59,7 +59,7 @@ void* consumer_thrd_func(void*data)
 	if(random==0)
 		random=0.3;
 	sleep_time = -1 *mean_mue* log(random);
-	//printf("\ngonna sleep for %lf in ms %d for %lf log is %lf",sleep_time,(int)ceil(sleep_time/1000),random,log(random));
+	printf("\ngonna sleep for %lf in ms %d for %lf log is %lf",sleep_time,(int)ceil(sleep_time/1000),random,log(random));
 	sleep((int)ceil(sleep_time/1000));
 	}	
 		pthread_mutex_unlock(&protect_queue);
@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
 	bzero(&closest, sizeof(closest));
 	ret =closest_match_to_interface(head,serverIP,&closest.sin_addr); 
 
-	//printf("[INFO] closest is %s\n",inet_ntoa(closest.sin_addr));
+//	printf("[INFO] closest is %s\n",inet_ntoa(closest.sin_addr));
 	cliaddr.sin_addr.s_addr = closest.sin_addr.s_addr;	
 	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sockfd < 0) {
@@ -192,6 +192,7 @@ int main(int argc, char **argv) {
 	else if(ret==2)
 	{
 		/**then its on local n/w , use dont' route**/
+		printf("Same subnet so using SO_DONTROUTE..\n");
 		if(setsockopt(sockfd, SOL_SOCKET, SO_DONTROUTE, (void *) &on, sizeof(on)) < 0)
 	    err_sys_p("Can't set SO_DONTROUTE on main socket"); 
 

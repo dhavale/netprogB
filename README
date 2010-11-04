@@ -1,3 +1,50 @@
-for CSE 533, TCP over UDP for a file transfer.
+=======
+CSE 533 Assignment 2.
+Members: 
+Sandeep Dhavale SBID: 107363385 sdhavale@cs.sunysb.edu
+Parag Kadu SBID: 107224387 pkadu@cs.sunysb.edu
 
-File server program // added by parag
+
+1. Binding port to each of the interface:
+	The function generate_ifi_list() defined in "common_lib.h" returns the list of
+interface info structure. generate_ifi_list() internally calls the function get_ifi_info_plus()
+Each interface has its node in the list having information such as name, ipaddress,
+network mask and subnet address (anding of ipaddress and subnet mask). Socket descriptors
+are stored in an array "socketDescriptors" each socket corresponds to the node in the list,
+that is per interface. print_ifi_list() prints the list in the dotted convention as per the
+requirements. Server after binding all interfaces to the port goes into select. Suppose there
+are 5 interfaces, we recieve request on 3rd we traverse the linked list to get to the 3rd node
+and this node info is passed to the child process.
+
+2. RTT functions have been modified to perform all the operations in integers rather than float.
+The original functions which were defined in "unprtt.h" have been changed and now exported into
+"myunprtt.h" and implemented in "myrtt.c". All numbers now correspond to milliseconds. In some 
+functions we still use float for fine granularity and use ceil() function appropriately.
+
+3.ARQ mechanism:
+Server and Client both use a circular buffer queue. All the functions and data structures are 
+defined and implemented in "np_queue.h" and "np_queue.c" respectively. The libraries implement
+a circular queue, but front and rear variables are linear. In the sense it exposes as we give an 
+impression of a linear window to the sender as well as reciever. Distance between front and rear 
+tell me the window size. We dont change front untill we recieve an ack. If we receive an ack for 
+front, we increment it by one. But it can happen that we get an cumulative ack. For this, we set
+front to the Ack we received, in short we jump ahead at the ack recieved location.In the code 
+this is handled in setFront(). 
+Similarly, on client side the packets can arrive in out of order. Each position occupied or not
+is maintained with the flag in circular queue. Front always points at the 1st Hole in the sequence.
+Once front's segment arrives, we do moveFront to move to the next whole/missing segment.
+
+4.Slow Start & congestion avoidance:
+Slow start and congestion avoidance are implemented witht the help of "processed_acks" and ssthresh 
+variables. When "processed_acks" matches congestion window then only window is increased by 1 if we 
+are in congestion avoidance phase. If we are in slow start mode, for every acknowledged segment we 
+increase the size by one. Cumulative acks are considered accordingly as they may ack more than one 
+segment.
+
+5.Fast retransmit:
+Dup_acks variable maintains a count of duplicate acks. If we see 3 dup acks, we immediately transmit
+the segment of interest without waiting for it to timeout.
+
+6. Timeout:
+At the timeout, we reset sshthresh to half of the congestion window and reduce congestion window to
+one. Ssthresh is max of 2 and half of congestion window.
